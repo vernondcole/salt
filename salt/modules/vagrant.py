@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 '''
+.. _vagrant_exectution_module:
+
 Work with virtual machines managed by Vagrant.
 
 .. versionadded:: 2018.3.0
@@ -53,7 +55,7 @@ def __virtual__():
     run Vagrant commands if possible
     '''
     if salt.utils.path.which('vagrant') is None:
-        return False, 'The vagrant module could not be loaded: vagrant command not found'
+        return False, 'The vagrant module could not be loaded: vagrant executable not found'
     return __virtualname__
 
 
@@ -161,8 +163,10 @@ def _vagrant_ssh_config(vm_):
     :return: dictionary of ssh stuff
     '''
     machine = vm_['machine']
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
     log.info('requesting vagrant ssh-config for VM %s', machine or '(default)')
-    cmd = 'vagrant ssh-config {}'.format(machine)
+    cmd = '{}vagrant ssh-config {}'.format(env, machine)
     reply = __salt__['cmd.shell'](cmd,
                                   runas=vm_.get('runas'),
                                   cwd=vm_.get('cwd'),
@@ -294,16 +298,15 @@ def vm_state(name='', cwd=None):
                  'provider': _, # the Vagrant VM provider
                  'name': _} # salt_id name
 
-    Known bug: if there are multiple machines in your Vagrantfile, and you request
-    the status of the ``primary`` machine, which you defined by leaving the ``machine``
-    parameter blank, then you may receive the status of all of them.
-    Please specify the actual machine name for each VM if there are more than one.
-
+    Known restrictions:
+    "Generic" machines (created by manipulation of the Vagrantfile) will not be included with "all" machines.
     '''
 
     if name:
         vm_ = get_vm_info(name)
         machine = vm_['machine']
+        vagrant_env = vm_.get('vagrant_env', '')
+        env = '{} '.format(vagrant_env) if vagrant_env else ''
         cwd = vm_['cwd'] or cwd  # usually ignore passed-in cwd
     else:
         if not cwd:
@@ -312,7 +315,7 @@ def vm_state(name='', cwd=None):
         machine = ''
 
     info = []
-    cmd = 'vagrant status {}'.format(machine)
+    cmd = '{}vagrant status {}'.format(env, machine)
     reply = __salt__['cmd.shell'](cmd, cwd)
     log.info('--->\n%s', reply)
     for line in reply.split('\n'):  # build a list of the text reply
@@ -336,6 +339,7 @@ def init(name,  # Salt_id for created VM
          runas=None,  # username who owns Vagrant box
          start=False,  # start the machine when initialized
          vagrant_provider='',  # vagrant provider (default=virtualbox)
+         vagrant_env='',  # environment variable(s) to pass to Vagrant and the Vagrantfile
          vm=None,  # a dictionary of VM configuration settings
          ):
     '''
@@ -351,6 +355,8 @@ def init(name,  # Salt_id for created VM
     :param runas: The username on the host who owns the Vagrant work files.
     :param start: (default: False) Start the virtual machine now.
     :param vagrant_provider: The name of a Vagrant VM provider (if not the default).
+    :param vagrant_env: Environment variable(s) to pass before 'vagrant' command. For example, 'GENERIC=true'
+           versionadded:: Neon.
     :param vm: Optionally, all the above information may be supplied in this dictionary.
     :return: A string indicating success, or False.
 
@@ -370,6 +376,7 @@ def init(name,  # Salt_id for created VM
     vm_['machine'] = machine or vm_.get('machine', machine)
     vm_['runas'] = runas or vm_.get('runas', runas)
     vm_['vagrant_provider'] = vagrant_provider or vm_.get('vagrant_provider', '')
+    vm_['vagrant_env'] = vagrant_env or vm_.get('vagrant_env', vagrant_env)
     _update_vm_info(name, vm_)
 
     if start:
@@ -404,7 +411,9 @@ def _start(name, vm_):  # internal call name, because "start" is a keyword argum
 
     vagrant_provider = vm_.get('vagrant_provider', '')
     provider_ = '--provider={}'.format(vagrant_provider) if vagrant_provider else ''
-    cmd = 'vagrant up {} {}'.format(machine, provider_)
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
+    cmd = '{}vagrant up {} {}'.format(env, machine, provider_)
     ret = __salt__['cmd.run_all'](cmd, runas=vm_.get('runas'), cwd=vm_.get('cwd'), output_loglevel='info')
 
     if machine == '':  # we were called using the default machine
@@ -449,8 +458,10 @@ def stop(name):
     '''
     vm_ = get_vm_info(name)
     machine = vm_['machine']
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
 
-    cmd = 'vagrant halt {}'.format(machine)
+    cmd = '{}vagrant halt {}'.format(env, machine)
     ret = __salt__['cmd.retcode'](cmd,
                                   runas=vm_.get('runas'),
                                   cwd=vm_.get('cwd'))
@@ -469,8 +480,10 @@ def pause(name):
     '''
     vm_ = get_vm_info(name)
     machine = vm_['machine']
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
 
-    cmd = 'vagrant suspend {}'.format(machine)
+    cmd = '{}vagrant suspend {}'.format(env, machine)
     ret = __salt__['cmd.retcode'](cmd,
                                   runas=vm_.get('runas'),
                                   cwd=vm_.get('cwd'))
@@ -493,8 +506,10 @@ def reboot(name, provision=False):
     vm_ = get_vm_info(name)
     machine = vm_['machine']
     prov = '--provision' if provision else ''
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
 
-    cmd = 'vagrant reload {} {}'.format(machine, prov)
+    cmd = '{}vagrant reload {} {}'.format(env, machine, prov)
     ret = __salt__['cmd.retcode'](cmd,
                                   runas=vm_.get('runas'),
                                   cwd=vm_.get('cwd'))
@@ -515,8 +530,10 @@ def destroy(name):
     '''
     vm_ = get_vm_info(name)
     machine = vm_['machine']
+    vagrant_env = vm_.get('vagrant_env', '')
+    env = '{} '.format(vagrant_env) if vagrant_env else ''
 
-    cmd = 'vagrant destroy -f {}'.format(machine)
+    cmd = '{}vagrant destroy -f {}'.format(env, machine)
 
     ret = __salt__['cmd.run_all'](cmd,
                                   runas=vm_.get('runas'),

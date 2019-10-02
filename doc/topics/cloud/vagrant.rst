@@ -4,8 +4,8 @@
 Getting Started With Vagrant
 ============================
 
-The Vagrant driver is a new, experimental driver for spinning up a VagrantBox
-virtual machine, and installing Salt on it.
+The Vagrant driver spins up a VagrantBox virtual machine on a Salt minion,
+and installs Salt, and a Salt minion, on it.
 
 Dependencies
 ============
@@ -102,6 +102,7 @@ Profile configuration example:
       # ssh_username: '' # also required when ssh_host is used.
       # target_network: None  # Expected CIDR address range of your bridged network
       # force_minion_config: false  # Set "true" to re-purpose an existing VM
+      # vagrant_env: '' # a string containing environment variables to pass to Vagrant
 
 The machine can now be created and configured with the following command:
 
@@ -120,6 +121,9 @@ to it can be verified with Salt:
 .. code-block:: bash
 
     salt my-id test.version
+
+To see all options which can be set in a profile definition, please refer to the documentation for the
+call to `vagrant.init` as found in :ref:`SALT.MODULES.VAGRANT <vagrant_execution_module>`.
 
 .. _host provisioning example:
 
@@ -267,3 +271,63 @@ Create and use your new Salt minion
     git clone ssh://git@github.com/yourID/your_project
     # etc...
 
+Advanced Vagrant: environment variables and generic Vagrant machines
+--------------------------------------------------------------------
+
+Vagrant documentation provides a list of `environment variables`_ which you
+can use to control its operation.
+
+.. _`environment variables`: https://www.vagrantup.com/docs/other/environmental-variables.html
+
+Because the *Vagrantfile* is actual Ruby code which is executed during the "vagrant" command,
+a programmer can call almost any Ruby operation from the Vagrantfile,
+including reading (and reacting to) environment variables.
+
+In POSIX, environment variables can be defined for a single shell command by prepending them on
+the command line.
+
+To make use of this, a string defined in a Salt Cloud "profile" file "vagrant_env" option will be
+prepended to the "vagrant" command used to control the cloud VM.
+
+We can use these features to overcome one of the limitations of Vagrant:
+the ability to name a Virtual Machine without editing the Vagrantfile.
+
+Suppose our Vagrantfile contains code like the following:
+
+.. code-block:: ruby
+
+    vagrant_command = ARGV[0]
+    vagrant_object = ARGV.length > 1 ? ARGV[1] : ""  # the name (if any) of the vagrant VM for this command
+    Vagrant.configure(2) do |config|
+
+           #  [ ... begin code snip ... ]
+      # . . . . . . .  Define a generic machine with Salt minion installed . . . . . . . . . . . . . .
+      # . Its name will be what ever name was typed on a command line if created by a command like:
+      # . generic=t ./vgr up somename
+      #
+      generic = ENV['generic']
+      if generic and generic.downcase.chars.first == "t" then
+        node_id = vagrant_object
+        config.vm.define node_id, autostart: false do |quail_config|
+            quail_config.vm.hostname = node_id
+            if vagrant_command == "up"
+               puts "Starting #{node_id}.\n"
+            end
+        end   # [ ... ruby code continues ... ]
+
+Then we could start a VM named "my1" using a profile like:
+
+.. code-block:: yaml
+
+    # file /etc/salt/cloud.profiles.d/my_vagrant_profiles.conf on bevymaster
+    my1:
+      host: my_laptop
+      machine: my1
+      vagrant_runas: my_username
+      cwd: '/opt/my_project'
+      provider: my_vagrant_provider
+      vagrant_env: generic=true
+
+A complete working example can be found in the salt-bevy_ project repo.
+
+.. _salt-bevy: https://github.com/salt-bevy/salt-bevy

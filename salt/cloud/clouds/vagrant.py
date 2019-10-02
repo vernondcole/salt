@@ -10,6 +10,9 @@ Use of this module requires some configuration in cloud profile and provider
 files as described in the
 :ref:`Getting Started with Vagrant <getting-started-with-vagrant>` documentation.
 
+To find more ideas about options which can be set in a profile definition,
+please refer to the documentation found in :ref:`SALT.MODULES.VAGRANT <vagrant_execution_module>`.
+
 .. versionadded:: 2018.3.0
 
 
@@ -57,9 +60,16 @@ def avail_locations(call=None):
 
 
 def avail_images(call=None):
-    '''This function returns a list of images available for this cloud provider.
-     vagrant will return a list of profiles.
-     salt-cloud --list-images my-cloud-provider
+    '''
+    This function returns a list of images available for this cloud provider.
+    CLI Example:
+
+    .. code-block:: bash
+
+         salt-cloud --list-images my-cloud-provider
+
+         # vagrant will return a list of profiles.
+
     '''
     vm_ = get_configured_provider()
     return {'Profiles': [profile for profile in vm_['profiles']]}
@@ -130,7 +140,7 @@ def list_nodes_full(call=None):
 
     .. code-block:: bash
 
-        salt-call -F
+        salt-cloud -F
     '''
     ret = _list_nodes(call)
 
@@ -208,6 +218,8 @@ def create(vm_):
         'vagrant_up_timeout', vm_, __opts__, default=300)
     vm_['vagrant_provider'] = config.get_cloud_config_value(
         'vagrant_provider', vm_, __opts__, default='')
+    vm_['vagrant_env'] = config.get_cloud_config_value(
+        'vagrant_env', vm_, __opts__, default='')
     vm_['grains'] = {'salt-cloud:vagrant': {'host': host, 'machine': machine}}
 
     log.info('sending \'vagrant.init %s machine=%s\' command to %s', name, machine, host)
